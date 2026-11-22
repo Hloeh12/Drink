@@ -9,7 +9,10 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          node-version: '20'
       
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
