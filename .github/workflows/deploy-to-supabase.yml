@@ -1,0 +1,37 @@
+name: Deploy to Supabase
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy migrations to Supabase
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL secret 未配置，跳过部署"
+            echo "请在仓库 Settings → Secrets → Actions 中添加 SUPABASE_DB_URL"
+            echo "格式：postgresql://postgres.[project]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres"
+            exit 0
+          fi
+
+          # 安装 PostgreSQL 客户端
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client > /dev/null 2>&1
+
+          # 执行所有迁移文件
+          for sql_file in supabase/migrations/*.sql; do
+            echo "→ 执行: $sql_file"
+            psql "$SUPABASE_DB_URL" -f "$sql_file" -v ON_ERROR_STOP=1
+            echo "✓ 完成: $sql_file"
+          done
+
+          echo "=== 所有迁移执行完毕 ==="
