@@ -1,33 +1,24 @@
-name: 打卡助手
-options:
-  deploymentTarget:
-    iOS: "15.0"
-  createIntermediateGroups: true
-settings:
-  base:
-    SWIFT_VERSION: 5.0
-    TARGETED_DEVICE_FAMILY: "1"
-targets:
-  打卡助手:
-    type: application
-    platform: iOS
-    sources:
-      - path: 打卡助手
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.dakazhushou
-        GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_CFBundleDisplayName: 打卡助手
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_LSRequiresIPhoneOS: true
-schemes:
-  打卡助手:
-    build:
-      targets:
-        打卡助手: all
-    run:
-      config: Debug
-    archive:
-      config: Release
+project:
+  name: Drink
+  targets:
+    Drink:
+      type: application
+      platform: iOS
+      sources:
+        - path: .
+          includes:
+            - "**/*"
+            - "!**/*.xcodeproj"
+      config:
+        base: Release
+        configList:
+          Debug:
+            provisioningStyle: automatic
+          Release:
+            provisioningStyle: automatic
+      settings:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hloeh12.drink
+        MARKETING_VERSION: 1.0
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: 1
+        SUPPORTS_MACCATALYST: false

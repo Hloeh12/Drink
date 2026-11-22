@@ -1,0 +1,47 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 15.4
+      
+      - name: Install dependencies
+        run: |
+          brew install xcodegen
+      
+      - name: Generate Xcode project
+        run: |
+          cd . && xcodegen generate --spec project.yml
+      
+      - name: Build unsigned IPA
+        run: |
+          DERIVED_DATA="$PWD/.derivedData"
+          xcodebuild -project "$PWD/Drink.xcodeproj" -scheme "Drink" \
+            -configuration Release -sdk iphoneos \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          
+          mkdir -p package/Payload
+          ditto "$DERIVED_DATA/Build/Products/Release-iphoneos/Drink.app" \
+            "$PWD/package/Payload/Drink.app"
+          
+          (cd package && zip -qry "../Drink-unsigned.ipa" Payload)
+      
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Drink-unsigned-IPA
+          path: Drink-unsigned.ipa
+          retention-days: 1

@@ -1,0 +1,21 @@
+name: Deploy to Supabase
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Supabase
+        uses: supabase/supabase-github-action@v1
+        with:
+          supabase-project-id: ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase-api-key: ${{ secrets.SUPABASE_API_KEY }}
+          database-branch: main
+          sql-file: supabase/migrations/*.sql
+          query-timeout: 60
