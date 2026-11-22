@@ -129,10 +129,10 @@ struct WeightTrendView: View {
     }
 
     private var yDomain: ClosedRange<Double> {
-        let min = minWeight ?? 0
-        let max = maxWeight ?? 100
-        let padding = max((max - min) * 0.15, 1)
-        return (min - padding)...(max + padding)
+        let lo = minWeight ?? 0
+        let hi = maxWeight ?? 100
+        let padding = Swift.max((hi - lo) * 0.15, 1)
+        return (lo - padding)...(hi + padding)
     }
 
     private func barColor(for weight: Double?, date: Date) -> Color {
@@ -141,9 +141,9 @@ struct WeightTrendView: View {
     }
 
     private func barHeight(_ weight: Double?, available: CGFloat) -> CGFloat {
-        guard let weight = weight, let min = minWeight, let max = maxWeight, max > min else { return 4 }
-        let ratio = CGFloat((weight - min) / (max - min))
-        return max(8, available * (0.25 + 0.75 * ratio))
+        guard let weight = weight, let lo = minWeight, let hi = maxWeight, hi > lo else { return 4 }
+        let ratio = CGFloat((weight - lo) / (hi - lo))
+        return Swift.max(8, available * (0.25 + 0.75 * ratio))
     }
 
     private func dateLabel(_ date: Date) -> String {

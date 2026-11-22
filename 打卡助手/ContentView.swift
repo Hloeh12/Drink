@@ -26,6 +26,15 @@ struct ContentView: View {
                         reminderCard
                         HistoryChart(title: "最近 7 天喝水", kind: .water)
                         HistoryChart(title: "最近 7 天体重", kind: .weight)
+                        Button { showWeightTrend = true } label: {
+                            HStack {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                Text("查看体重趋势详情")
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption).foregroundColor(.secondary)
+                            }.font(.subheadline.weight(.medium)).foregroundColor(Color(hex: 0x38B27A))
+                            .padding(.horizontal, 4)
+                        }
                         calorieSummaryCard
                         MealReview()
                         exportCard
@@ -215,6 +224,7 @@ private struct MealField: View {
 
 private struct CalorieField: View {
     let label: String; @Binding var value: Int?
+    init(_ label: String, value: Binding<Int?>) { self.label = label; _value = value }
     var body: some View {
         HStack {
             Text(label).font(.subheadline).foregroundColor(.secondary).frame(width: 54, alignment: .leading)
