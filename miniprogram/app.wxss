@@ -1,0 +1,23 @@
+page {
+  background: #eef6fb;
+  color: #1d3548;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  padding: 24rpx 24rpx 60rpx;
+  box-sizing: border-box;
+}
+.card {
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  box-shadow: 0 12rpx 40rpx rgba(47, 155, 224, 0.08);
+  margin-bottom: 28rpx;
+}
+.title {
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 16rpx;
+}
+.sub {
+  font-size: 24rpx;
+  color: #6b8598;
+}

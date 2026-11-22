@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "打卡助手",
+    "navigationBarBackgroundColor": "#2f9be0",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#eef6fb"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

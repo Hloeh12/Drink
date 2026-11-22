@@ -1,0 +1,14 @@
+{
+  "description": "打卡助手：喝水 + 饮食 + 体重记录",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "libVersion": "3.4.0",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": false
+  },
+  "projectname": "checkin-helper",
+  "miniprogramRoot": "./"
+}

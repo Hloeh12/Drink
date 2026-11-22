@@ -1,0 +1,32 @@
+name: 打卡助手
+options:
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  打卡助手:
+    type: application
+    platform: iOS
+    sources:
+      - path: 打卡助手
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.dakazhushou
+        INFOPLIST_KEY_CFBundleDisplayName: 打卡助手
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_LSRequiresIPhoneOS: true
+schemes:
+  打卡助手:
+    build:
+      targets:
+        打卡助手: all
+    run:
+      config: Debug
+    archive:
+      config: Release

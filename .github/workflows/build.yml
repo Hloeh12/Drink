@@ -1,0 +1,51 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build unsigned app
+        shell: bash
+        run: |
+          set -euo pipefail
+          DERIVED_DATA="$RUNNER_TEMP/derived-data"
+          xcodebuild \
+            -project "$GITHUB_WORKSPACE/打卡助手.xcodeproj" \
+            -scheme "打卡助手" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          APP_PATH="$DERIVED_DATA/Build/Products/Release-iphoneos/打卡助手.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/打卡助手.app"
+          (cd "$RUNNER_TEMP/ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/打卡助手-unsigned.ipa" Payload)
+          test -f "$GITHUB_WORKSPACE/打卡助手-unsigned.ipa"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: dakazhushou-unsigned-ipa
+          path: ${{ github.workspace }}/打卡助手-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
