@@ -12,10 +12,5 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Deploy to Supabase
-        uses: supabase/action@v1
-        with:
-          supabase-project-id: ${{ secrets.SUPABASE_PROJECT_ID }}
-          supabase-api-key: ${{ secrets.SUPABASE_API_KEY }}
-          database-branch: main
-          sql-file: supabase/migrations/*.sql
-          query-timeout: 60
+        run: |
+          curl -s https://raw.githubusercontent.com/supabase/supabase/master/.github/actions/deploy-supabase/main.sh | bash
