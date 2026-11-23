@@ -68,6 +68,16 @@ struct IconBadge: View {
     }
 }
 
+// MARK: - 触感反馈
+
+import UIKit
+
+enum Haptic {
+    static func light() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+    static func medium() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+}
+
 // MARK: - 细进度条
 
 struct SlimBar: View {

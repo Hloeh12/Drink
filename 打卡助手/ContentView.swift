@@ -88,21 +88,29 @@ struct BottomBar: View {
 struct TodayView: View {
     @EnvironmentObject private var store: HealthStore
     @State private var showReset = false
+    @State private var selectedDay: Date? = nil   // nil = 今天
+    @State private var celebrate = false
+
+    private var isToday: Bool { selectedDay == nil }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 topHeader
-                DateStrip(days: store.dates())
-                HeroCard()
-                waterControls
-                MealSection()
-                weightCard
+                DateStrip(days: store.dates(), selected: isToday ? Date() : selectedDay!) { day in
+                    Haptic.light()
+                    selectedDay = Calendar.current.isDateInToday(day) ? nil : day
+                }
+                if isToday { HeroCard() } else { HistoryCard(day: selectedDay!) }
+                if isToday { waterControls }
+                if isToday { MealSection() } else { HistoryMeals(day: selectedDay!) }
+                if isToday { weightCard }
                 tipText
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 110)
+            .animation(.easeInOut(duration: 0.2), value: selectedDay)
         }
     }
 
@@ -159,6 +167,7 @@ struct TodayView: View {
                 }
 
                 Button {
+                    Haptic.light()
                     store.setWater(store.todayWater + store.selectedCup)
                 } label: {
                     HStack(spacing: 8) {
@@ -263,6 +272,8 @@ struct TodayView: View {
 struct DateStrip: View {
     @EnvironmentObject private var store: HealthStore
     let days: [Date]
+    var selected: Date
+    var onTap: (Date) -> Void
 
     var body: some View {
         HStack(spacing: 7) {
@@ -270,24 +281,31 @@ struct DateStrip: View {
                 let amount = store.waterFor(day)
                 let ratio = Double(amount) / Double(max(store.goal, 1))
                 let isToday = Calendar.current.isDateInToday(day)
+                let isSelected = Calendar.current.isDate(day, inSameDayAs: selected)
                 VStack(spacing: 5) {
                     Text(isToday ? "今天" : weekday(day))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(isToday ? Palette.ink : Palette.ink2)
+                        .foregroundColor(isSelected ? (isToday ? Palette.ink : Palette.blue) : Palette.ink2)
                     Text(day, format: .dateTime.day())
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Palette.ink)
+                    // 当日完成度小圆点
+                    Circle()
+                        .fill(ratio >= 1 ? Palette.green : (ratio > 0 ? Palette.orange : Palette.ink3.opacity(0.4)))
+                        .frame(width: 5, height: 5)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
+                .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(ratio >= 1 ? Palette.greenSoft : (ratio > 0 ? Palette.orangeSoft : Color(hex: 0xF1F3F5)))
+                        .fill(isSelected ? (isToday ? Palette.greenSoft : Palette.blueSoft) : Color(hex: 0xF1F3F5))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(isToday ? Palette.ink : Color.clear, lineWidth: 2)
+                        .stroke(isSelected ? Palette.blue : Color.clear, lineWidth: 1.5)
                 )
+                .contentShape(Rectangle())
+                .onTapGesture { onTap(day) }
             }
         }
     }
@@ -301,6 +319,8 @@ struct DateStrip: View {
 
 struct HeroCard: View {
     @EnvironmentObject private var store: HealthStore
+    @State private var cupBounce = false
+    @State private var numberPulse = false
 
     private var progress: Double {
         Double(store.todayWater) / Double(max(store.goal, 1))
@@ -310,6 +330,7 @@ struct HeroCard: View {
         return [m.breakfast, m.lunch, m.dinner, m.snack]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
     }
+    private var goalReached: Bool { store.todayWater >= store.goal }
 
     var body: some View {
         SurfaceCard(padding: 20) {
@@ -319,11 +340,19 @@ struct HeroCard: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Palette.ink2)
                     Spacer()
-                    Text("目标 \(store.goal) ml")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Palette.blue)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Capsule().fill(Palette.blueSoft))
+                    if goalReached {
+                        Label("达标", systemImage: "checkmark.seal.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Palette.green)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Capsule().fill(Palette.greenSoft))
+                    } else {
+                        Text("目标 \(store.goal) ml")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Palette.blue)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Capsule().fill(Palette.blueSoft))
+                    }
                 }
 
                 HStack(alignment: .center, spacing: 18) {
@@ -332,19 +361,40 @@ struct HeroCard: View {
                             Text("\(store.todayWater)")
                                 .font(.system(size: 46, weight: .bold, design: .rounded))
                                 .foregroundColor(Palette.ink)
+                                .scaleEffect(numberPulse ? 1.12 : 1)
                             Text("ml").font(.system(size: 15, weight: .medium)).foregroundColor(Palette.ink2)
                         }
-                        SlimBar(value: progress, color: Palette.blue, height: 8)
+                        SlimBar(value: progress, color: goalReached ? Palette.green : Palette.blue, height: 8)
                         HStack {
                             Text("已完成 \(store.percent)%")
                                 .font(.system(size: 12)).foregroundColor(Palette.ink2)
                             Spacer()
-                            Text("还差 \(max(0, store.goal - store.todayWater)) ml")
-                                .font(.system(size: 12)).foregroundColor(Palette.ink2)
+                            Text(goalReached ? "太棒了，目标达成 🎉" : "还差 \(max(0, store.goal - store.todayWater)) ml")
+                                .font(.system(size: 12)).foregroundColor(goalReached ? Palette.green : Palette.ink2)
                         }
                     }
+                    // 点水杯 = 喝一杯
                     WaterCupView(progress: progress)
                         .frame(width: 60, height: 92)
+                        .scaleEffect(cupBounce ? 0.85 : 1)
+                        .onTapGesture {
+                            Haptic.light()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { cupBounce = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { cupBounce = false }
+                            }
+                            let before = store.todayWater
+                            store.setWater(before + store.selectedCup)
+                            if before < store.goal && store.todayWater >= store.goal {
+                                Haptic.success()
+                            } else {
+                                withAnimation(.easeOut(duration: 0.18)) { numberPulse = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    withAnimation { numberPulse = false }
+                                }
+                            }
+                        }
+                        .accessibilityLabel("点按喝一杯 \(store.selectedCup) 毫升")
                 }
 
                 Rectangle().fill(Palette.line).frame(height: 1)

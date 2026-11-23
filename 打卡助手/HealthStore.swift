@@ -120,6 +120,14 @@ final class HealthStore: ObservableObject {
         }
         return false
     }
+    func mealFor(_ date: Date) -> DayMeal { meals[Self.key(for: date)] ?? DayMeal() }
+
+    /// 指定日期相对目标的完成百分比
+    func percentFor(_ date: Date) -> Int {
+        let w = waterFor(date)
+        return min(100, Int((Double(w) / Double(max(goal, 1)) * 100).rounded()))
+    }
+
     var todayMeal: DayMeal { meals[todayKey] ?? DayMeal() }
     var todayWeight: Double? {
         weights.last(where: { $0.date == todayKey })?.weight
