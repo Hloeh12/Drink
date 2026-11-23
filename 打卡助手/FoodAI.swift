@@ -121,7 +121,7 @@ enum FoodAI {
         }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
-        req.setValue("token \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
         req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
         req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
@@ -178,8 +178,8 @@ enum FoodAI {
             "https://api.individual.githubcopilot.com/chat/completions",
             "https://api.githubcopilot.com/chat/completions"
         ]
-        // 依次尝试的模型（免费版 vision 可用性随政策变动，自动回退）
-        let models = ["gpt-4o", "gpt-4o-mini", "gpt-4.1-mini"]
+        // 2026-11-24 实测：免费版可用模型 = gpt-4.1（vision）；旧 gpt-4o 系列已不支持 vision
+        let models = ["gpt-4.1", "gpt-4o", "gpt-4o-mini"]
 
         var lastStatus = 0
         var lastBody = ""
@@ -195,8 +195,8 @@ enum FoodAI {
                 req.setValue("Bearer \(ct)", forHTTPHeaderField: "Authorization")
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
-                req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
-                req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
+                req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Editor-Plugin-Version")
+                req.setValue("vscode-chat", forHTTPHeaderField: "Copilot-Integration-Id")
                 req.setValue(UUID().uuidString, forHTTPHeaderField: "x-request-id")
                 req.setValue("2025-04-01", forHTTPHeaderField: "x-github-api-version")
                 req.httpBody = bodyData
