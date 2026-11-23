@@ -14,3 +14,7 @@ xcuserdata/
 .swiftpm/
 ipa-download/
 .derivedData/
+
+# 临时图标生成脚本
+make_icon.py
+icon1024.png

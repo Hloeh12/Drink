@@ -103,6 +103,23 @@ final class HealthStore: ObservableObject {
 
     var todayKey: String { Self.key(for: Date()) }
     var todayWater: Int { water[todayKey, default: 0] }
+
+    /// 指定日期的饮水量
+    func waterFor(_ date: Date) -> Int {
+        water[Self.key(for: date), default: 0]
+    }
+
+    /// 指定日期是否有任何记录
+    func hasRecord(_ date: Date) -> Bool {
+        let key = Self.key(for: date)
+        if water[key, default: 0] > 0 { return true }
+        if let meal = meals[key] {
+            let texts = [meal.breakfast, meal.lunch, meal.dinner, meal.snack]
+            if texts.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { return true }
+            if !meal.weight.isEmpty { return true }
+        }
+        return false
+    }
     var todayMeal: DayMeal { meals[todayKey] ?? DayMeal() }
     var todayWeight: Double? {
         weights.last(where: { $0.date == todayKey })?.weight
