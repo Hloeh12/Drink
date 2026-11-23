@@ -9,7 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Palette.bg.ignoresSafeArea()
+            LiquidBackground()
 
             Group {
                 switch tab {

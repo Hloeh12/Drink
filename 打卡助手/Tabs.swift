@@ -28,8 +28,7 @@ struct TrendTabView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 HStack {
-                    Text("趋势")
-                        .font(.system(size: 24, weight: .bold))
+                    Text("趋势")                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.ink)
                     Spacer()
                     Text("近 7 天")
@@ -52,6 +51,7 @@ struct TrendTabView: View {
             .padding(.top, 8)
             .padding(.bottom, 110)
         }
+        .background(LiquidBackground())
     }
 
     private var latestText: String {
@@ -220,6 +220,7 @@ struct DiaryTabView: View {
             .padding(.top, 8)
             .padding(.bottom, 110)
         }
+        .background(LiquidBackground())
     }
 
     private func legend(_ color: Color, _ text: String) -> some View {
@@ -249,6 +250,7 @@ struct MeTabView: View {
             .padding(.top, 8)
             .padding(.bottom, 110)
         }
+        .background(LiquidBackground())
         .sheet(isPresented: $showShare) {
             if let url = csvURL { ShareSheet(items: [url]) }
         }
@@ -352,7 +354,7 @@ struct MeTabView: View {
                 Text("本工具仅用于自我记录，不提供医疗建议。")
                     .font(.system(size: 11))
                     .foregroundColor(Palette.ink3)
-                Text("版本 1.1").font(.system(size: 10)).foregroundColor(Palette.ink3).padding(.top, 2)
+                Text("版本 1.3").font(.system(size: 10)).foregroundColor(Palette.ink3).padding(.top, 2)
             }
         }
     }
