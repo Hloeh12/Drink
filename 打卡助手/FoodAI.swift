@@ -154,9 +154,9 @@ enum FoodAI {
 
     private static func callVision(jpegData: Data, copilotToken ct: String) async throws -> (items: String, calories: Int) {
         let b64 = jpegData.base64EncodedString()
-        let endpoint = "https://api.githubcopilot.com/chat/completions"
 
         let payload: [String: Any] = [
+            "model": "gpt-4o",
             "messages": [
                 [
                     "role": "system",
@@ -176,24 +176,39 @@ enum FoodAI {
         guard let bodyData = try? JSONSerialization.data(withJSONObject: payload) else {
             throw AIError.requestError
         }
-        guard let url = URL(string: endpoint) else { throw AIError.badURL }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 60
-        req.setValue("Bearer \(ct)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
-        req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
-        req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
-        req.httpBody = bodyData
 
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw AIError.requestError }
-        guard (200..<300).contains(http.statusCode) else {
-            if http.statusCode == 401 { cachedCopilotToken = nil }
-            throw AIError.requestFailed("服务返回 \(http.statusCode)，请稍后重试")
+        // 免费版账号走 individual 域名，通用域名做备选
+        let endpoints = [
+            "https://api.individual.githubcopilot.com/chat/completions",
+            "https://api.githubcopilot.com/chat/completions"
+        ]
+
+        var lastStatus = 0
+        for ep in endpoints {
+            guard let url = URL(string: ep) else { continue }
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 60
+            req.setValue("Bearer \(ct)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
+            req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
+            req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
+            req.httpBody = bodyData
+
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else { throw AIError.requestError }
+            lastStatus = http.statusCode
+            guard (200..<300).contains(http.statusCode) else {
+                if http.statusCode == 401 { cachedCopilotToken = nil }
+                continue // 换下一个端点
+            }
+            return try parseVisionResponse(data)
         }
+        throw AIError.requestFailed("服务返回 \(lastStatus)，请稍后重试")
+    }
 
+    private static func parseVisionResponse(_ data: Data) throws -> (items: String, calories: Int) {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
               let msg = choices.first?["message"] as? [String: Any],
