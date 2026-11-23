@@ -1,6 +1,5 @@
 import SwiftUI
 import Charts
-import AuthenticationServices
 
 struct ContentView: View {
     @EnvironmentObject private var store: HealthStore
@@ -246,76 +245,141 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - 登录视图
+// MARK: - 登录视图（邮箱密码）
 
 struct LoginView: View {
     @StateObject private var supabase = SupabaseClient.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isSignUp = false
+    @State private var errorMessage: String?
+    @State private var infoMessage: String?
+    @State private var isLoading = false
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                Spacer()
-                Image(systemName: "drop.fill")
-                    .font(.system(size: 56))
-                    .foregroundColor(.blue)
-                Text("打卡助手")
-                    .font(.title.bold())
-                Text("登录后可在多设备间同步数据")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                Spacer()
-                if supabase.isAuthenticated {
-                    VStack(spacing: 16) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.green)
-                        if let email = supabase.userEmail {
-                            Text(email).font(.subheadline).foregroundColor(.secondary)
+            ScrollView {
+                VStack(spacing: 24) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.blue)
+                        .padding(.top, 20)
+
+                    Text(isSignUp ? "注册账号" : "登录")
+                        .font(.title2.bold())
+
+                    Text("登录后可在多设备间同步数据")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if supabase.isAuthenticated {
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.green)
+                            if let email = supabase.userEmail {
+                                Text(email).font(.subheadline).foregroundColor(.secondary)
+                            }
+                            Button(role: .destructive) {
+                                supabase.signOut()
+                                dismiss()
+                            } label: {
+                                Label("退出登录", systemImage: "arrow.right.square")
+                                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            }.buttonStyle(.bordered)
                         }
-                        Button(role: .destructive) {
-                            supabase.signOut()
-                            dismiss()
-                        } label: {
-                            Label("退出登录", systemImage: "arrow.right.square")
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                        }.buttonStyle(.bordered)
+                    } else {
+                        VStack(spacing: 16) {
+                            TextField("邮箱", text: $email)
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                                .textFieldStyle(.roundedBorder)
+
+                            SecureField("密码", text: $password)
+                                .textFieldStyle(.roundedBorder)
+
+                            if let errorMessage = errorMessage {
+                                Text(errorMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .multilineTextAlignment(.center)
+                            }
+                            if let infoMessage = infoMessage {
+                                Text(infoMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                                    .multilineTextAlignment(.center)
+                            }
+
+                            Button {
+                                Task { await authenticate() }
+                            } label: {
+                                Group {
+                                    if isLoading {
+                                        ProgressView()
+                                    } else {
+                                        Text(isSignUp ? "注册" : "登录")
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color(hex: 0x2F9BE0))
+                            .disabled(email.isEmpty || password.isEmpty || isLoading)
+
+                            Button {
+                                isSignUp.toggle()
+                                errorMessage = nil
+                                infoMessage = nil
+                            } label: {
+                                Text(isSignUp ? "已有账号？去登录" : "没有账号？去注册")
+                                    .font(.subheadline)
+                                    .foregroundColor(Color(hex: 0x2F9BE0))
+                            }
+                        }
+                        .padding(.horizontal, 8)
                     }
-                } else {
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.fullName, .email]
-                    } onCompletion: { result in
-                        handleSignIn(result)
-                    }
-                    .signInWithAppleButtonStyle(.black)
-                    .frame(height: 50)
-                    .cornerRadius(12)
-                }
-                Spacer()
-            }.padding()
-            .navigationTitle("登录")
+                }.padding()
+            }
+            .navigationTitle("账号")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("关闭") { dismiss() } }
-        }
+        }.navigationViewStyle(.stack)
     }
 
-    private func handleSignIn(_ result: Result<ASAuthorization, Error>) {
-        switch result {
-        case .success(let auth):
-            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
-                  let identityToken = credential.identityToken,
-                  let authCode = credential.authorizationCode else { return }
-            Task {
-                do {
-                    try await supabase.signInWithApple(identityToken: identityToken, authorizationCode: authCode)
-                    await MainActor.run { dismiss() }
-                } catch {
-                    // 错误处理：静默失败，用户可重试
+    private func authenticate() async {
+        isLoading = true
+        errorMessage = nil
+        infoMessage = nil
+
+        do {
+            if isSignUp {
+                try await supabase.signUp(email: email, password: password)
+                if supabase.isAuthenticated {
+                    await MainActor.run {
+                        isLoading = false
+                        dismiss()
+                    }
+                } else {
+                    await MainActor.run {
+                        infoMessage = "注册成功！请去邮箱确认后登录"
+                        isLoading = false
+                    }
+                }
+            } else {
+                try await supabase.signIn(email: email, password: password)
+                await MainActor.run {
+                    isLoading = false
+                    dismiss()
                 }
             }
-        case .failure:
-            break
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                isLoading = false
+            }
         }
     }
 }

@@ -6,10 +6,10 @@ import Foundation
 
 enum SupabaseConfig {
     /// Supabase 项目 URL，例如 https://xxxxx.supabase.co
-    static let url = "https://YOUR_PROJECT.supabase.co"
+    static let url = "https://phzemsnrglyeyhcswuqz.supabase.co"
     /// Supabase anon public key（公开密钥，不是 service role key）
     static let anonKey = "YOUR_ANON_KEY"
-    /// 是否启用云同步（填入正确的 url 和 key 后自动启用）
+    /// 是否启用云同步（填入正确的 key 后自动启用）
     static var enabled: Bool {
         !url.contains("YOUR_PROJECT") && !anonKey.contains("YOUR_ANON")
     }
@@ -17,7 +17,7 @@ enum SupabaseConfig {
 
 // MARK: - Supabase REST 客户端
 // 使用 Supabase PostgREST API + Auth API
-// 不依赖任何第三方库，纯 URLSession 实现
+// 纯 URLSession 实现，不依赖第三方库
 
 @MainActor
 final class SupabaseClient: ObservableObject {
@@ -26,7 +26,7 @@ final class SupabaseClient: ObservableObject {
     @Published private(set) var isAuthenticated = false
     @Published private(set) var userId: String?
     @Published private(set) var userEmail: String?
-    @Published private(set) var syncState: SyncState = .idle
+    @Published var syncState: SyncState = .idle
 
     enum SyncState: Equatable {
         case idle
@@ -51,7 +51,7 @@ final class SupabaseClient: ObservableObject {
     // MARK: - Session 恢复
 
     private func restoreSession() {
-        guard let token = accessToken,
+        guard let token = UserDefaults.standard.string(forKey: "supabase_access_token"),
               let expires = UserDefaults.standard.object(forKey: "supabase_token_expires") as? Date,
               expires > Date() else {
             return
@@ -62,28 +62,15 @@ final class SupabaseClient: ObservableObject {
         _ = token
     }
 
-    // MARK: - Sign in with Apple
+    // MARK: - 邮箱注册
 
-    /// 使用 Apple ID Credential 完成 Supabase 登录
-    /// - Parameters:
-    ///   - identityToken: ASAuthorizationAppleIDCredential.identityToken
-    ///   - authorizationCode: ASAuthorizationAppleIDCredential.authorizationCode
-    func signInWithApple(identityToken: Data, authorizationCode: Data) async throws {
-        guard SupabaseConfig.enabled else {
-            throw SupabaseError.notConfigured
-        }
+    func signUp(email: String, password: String) async throws {
+        guard SupabaseConfig.enabled else { throw SupabaseError.notConfigured }
 
-        let tokenString = String(data: identityToken, encoding: .utf8) ?? ""
-        let codeString = String(data: authorizationCode, encoding: .utf8) ?? ""
-
-        let body: [String: Any] = [
-            "provider": "apple",
-            "token": tokenString,
-            "code": codeString
-        ]
+        let body: [String: Any] = ["email": email, "password": password]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
 
-        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=third_party")!
+        let url = URL(string: "\(baseURL)/auth/v1/signup")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -92,7 +79,43 @@ final class SupabaseClient: ObservableObject {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let msg = String(data: data, encoding: .utf8) ?? "未知错误"
+            let msg = String(data: data, encoding: .utf8) ?? "注册失败"
+            throw SupabaseError.authFailed(msg)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        guard let accessToken = json["access_token"] as? String,
+              let user = json["user"] as? [String: Any],
+              let uid = user["id"] as? String else {
+            // 注册成功但需要邮箱确认
+            if json["user"] != nil {
+                throw SupabaseError.emailConfirmationRequired
+            }
+            throw SupabaseError.parseError
+        }
+
+        let expiresIn = json["expires_in"] as? Int ?? 3600
+        saveSession(token: accessToken, uid: uid, email: email, expiresIn: expiresIn)
+    }
+
+    // MARK: - 邮箱登录
+
+    func signIn(email: String, password: String) async throws {
+        guard SupabaseConfig.enabled else { throw SupabaseError.notConfigured }
+
+        let body: [String: Any] = ["email": email, "password": password]
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+
+        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=password")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.httpBody = bodyData
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            let msg = String(data: data, encoding: .utf8) ?? "登录失败"
             throw SupabaseError.authFailed(msg)
         }
 
@@ -104,18 +127,21 @@ final class SupabaseClient: ObservableObject {
         }
 
         let expiresIn = json["expires_in"] as? Int ?? 3600
-        let expires = Date().addingTimeInterval(TimeInterval(expiresIn))
+        saveSession(token: accessToken, uid: uid, email: email, expiresIn: expiresIn)
+    }
 
-        UserDefaults.standard.set(accessToken, forKey: "supabase_access_token")
+    // MARK: - 保存会话
+
+    private func saveSession(token: String, uid: String, email: String, expiresIn: Int) {
+        let expires = Date().addingTimeInterval(TimeInterval(expiresIn))
+        UserDefaults.standard.set(token, forKey: "supabase_access_token")
         UserDefaults.standard.set(expires, forKey: "supabase_token_expires")
         UserDefaults.standard.set(uid, forKey: "supabase_user_id")
-        UserDefaults.standard.set(user["email"] as? String ?? "", forKey: "supabase_user_email")
+        UserDefaults.standard.set(email, forKey: "supabase_user_email")
 
-        await MainActor.run {
-            self.isAuthenticated = true
-            self.userId = uid
-            self.userEmail = user["email"] as? String
-        }
+        isAuthenticated = true
+        userId = uid
+        userEmail = email
     }
 
     // MARK: - 登出
@@ -132,7 +158,6 @@ final class SupabaseClient: ObservableObject {
 
     // MARK: - 数据库 CRUD
 
-    /// UPSERT 一条记录到指定表
     func upsert(table: String, record: [String: Any]) async throws {
         guard SupabaseConfig.enabled else { throw SupabaseError.notConfigured }
         guard let token = accessToken else { throw SupabaseError.notAuthenticated }
@@ -154,7 +179,6 @@ final class SupabaseClient: ObservableObject {
         }
     }
 
-    /// 从指定表查询当前用户数据
     func select(table: String) async throws -> [[String: Any]] {
         guard SupabaseConfig.enabled else { throw SupabaseError.notConfigured }
         guard let token = accessToken else { throw SupabaseError.notAuthenticated }
@@ -204,15 +228,17 @@ enum SupabaseError: LocalizedError {
     case notConfigured
     case notAuthenticated
     case authFailed(String)
+    case emailConfirmationRequired
     case parseError
     case requestFailed
     case uploadFailed
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Supabase 未配置，请先在代码中填入项目 URL 和密钥"
+        case .notConfigured: return "Supabase 未配置，请先填入密钥"
         case .notAuthenticated: return "请先登录"
         case .authFailed(let msg): return "登录失败：\(msg)"
+        case .emailConfirmationRequired: return "注册成功！请去邮箱确认后登录"
         case .parseError: return "数据解析失败"
         case .requestFailed: return "网络请求失败"
         case .uploadFailed: return "照片上传失败"

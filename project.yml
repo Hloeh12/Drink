@@ -15,8 +15,6 @@ targets:
     platform: iOS
     sources:
       - path: 打卡助手
-    dependencies:
-      - sdk: AuthenticationServices.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.dakazhushou
@@ -26,10 +24,6 @@ targets:
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_LSRequiresIPhoneOS: true
-    entitlements:
-      path: 打卡助手/打卡助手.entitlements
-      properties:
-        com.apple.developer.applesignin: ["Default"]
 schemes:
   打卡助手:
     build:
