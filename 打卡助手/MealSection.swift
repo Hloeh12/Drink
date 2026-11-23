@@ -148,7 +148,7 @@ struct MealSection: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
                         Text(err).font(.system(size: 12))
                         Spacer()
-                        Button("设置 Token") { aiError = nil; openAISettings = true }
+                        Button("去授权") { aiError = nil; openAISettings = true }
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(Palette.red)

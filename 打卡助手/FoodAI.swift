@@ -1,21 +1,117 @@
 import Foundation
 import UIKit
 
-// MARK: - Copilot AI 识别服务
-// 使用 GitHub Copilot 的 OpenAI 兼容接口做食物图像识别
-// 流程：GitHub token -> copilot_internal/v2/token 换短期 token -> chat/completions (vision)
+// MARK: - GitHub 设备登录 + Copilot AI 识别
+// 流程：Device Flow 拿 OAuth token（自动含 copilot 权限）→ copilot_internal/v2/token
+//       换短期 token → api.githubcopilot.com/chat/completions (vision)
 
 enum FoodAI {
 
+    // Device Flow 持久化的 OAuth token
     static var token: String {
-        get { UserDefaults.standard.string(forKey: "gh_pat_for_ai") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "gh_pat_for_ai") }
+        get { KeychainHelper.get("gh_oauth_token") ?? "" }
+        set { KeychainHelper.set("gh_oauth_token", newValue) }
     }
-    static var isConfigured: Bool { token.contains("ghp_") || token.contains("github_pat_") || token.count > 20 }
+    static var isConfigured: Bool { token.count > 20 }
 
     private static var cachedCopilotToken: (value: String, expires: Date)?
 
-    /// 用 GitHub token 换取 Copilot API 短期 token
+    // MARK: - Keychain 轻量封装
+    enum KeychainHelper {
+        static func set(_ key: String, _ value: String) {
+            let data = Data(value.utf8)
+            SecItemDelete([
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrAccount: key
+            ] as CFDictionary)
+            SecItemAdd([
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrAccount: key,
+                kSecValueData: data
+            ] as CFDictionary, nil)
+        }
+        static func get(_ key: String) -> String? {
+            var query = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrAccount: key,
+                kSecReturnData: true,
+                kSecMatchLimit: kSecMatchLimitOne
+            ] as CFDictionary
+            var out: AnyObject?
+            guard SecItemCopyMatching(query, &out) == errSecSuccess,
+                  let d = out as? Data else { return nil }
+            return String(data: d, encoding: .utf8)
+        }
+        static func remove(_ key: String) {
+            SecItemDelete([
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrAccount: key
+            ] as CFDictionary)
+        }
+    }
+
+    // MARK: - Device Flow
+
+    struct DeviceFlowStart {
+        let deviceCode: String
+        let userCode: String
+        let verifyURI: String
+        let interval: Double
+    }
+
+    /// 第一步：请求设备码
+    static func startDeviceFlow() async throws -> DeviceFlowStart {
+        var req = URLRequest(url: URL(string: "https://github.com/login/device/code")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        // Copilot 官方客户端 ID
+        req.httpBody = "client_id=Iv1.b507a08c87ecfe98&scope=copilot".data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dc = obj["device_code"] as? String,
+              let uc = obj["user_code"] as? String else {
+            throw AIError.deviceFlowFailed("无法获取设备码，请检查网络")
+        }
+        let uri = (obj["verification_uri"] as? String) ?? "https://github.com/login/device"
+        let interval = (obj["interval"] as? Int).map { Double($0) } ?? 5.0
+        return DeviceFlowStart(deviceCode: dc, userCode: uc, verifyURI: uri, interval: interval)
+    }
+
+    /// 第二步：轮询等待用户授权
+    static func pollDeviceFlow(_ start: DeviceFlowStart) async throws {
+        let deadline = Date().addingTimeInterval(600) // 最多等 10 分钟
+        while Date() < deadline {
+            try await Task.sleep(nanoseconds: UInt64(start.interval * 1_000_000_000))
+            var req = URLRequest(url: URL(string: "https://github.com/login/oauth/access_token")!)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            req.httpBody = """
+            client_id=Iv1.b507a08c87ecfe98&device_code=\(start.deviceCode)&grant_type=urn:ietf:params:oauth:grant-type:device_code
+            """.data(using: .utf8)
+
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                continue
+            }
+            if let at = obj["access_token"] as? String {
+                token = at
+                cachedCopilotToken = nil
+                return
+            }
+            if let err = obj["error"] as? String {
+                if err == "authorization_pending" || err == "slow_down" { continue }
+                throw AIError.deviceFlowFailed("授权失败：\(err)")
+            }
+        }
+        throw AIError.deviceFlowFailed("授权超时，请重试")
+    }
+
+    /// 第三步：用 OAuth token 换 Copilot 短期 token
     private static func copilotToken() async throws -> String {
         if let c = cachedCopilotToken, c.expires > Date().addingTimeInterval(120) {
             return c.value
@@ -27,55 +123,60 @@ enum FoodAI {
         req.httpMethod = "GET"
         req.setValue("token \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
-        req.setValue(" vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version".trimmingCharacters(in: .whitespaces))
+        req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
         req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
 
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let t = obj["token"] as? String else {
+            token = ""
             throw AIError.authFailed
         }
-        let exp = (obj["expires_at"] as? Int).map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date().addingTimeInterval(1500)
+        let exp = (obj["expires_at"] as? Int).map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            ?? Date().addingTimeInterval(1500)
         cachedCopilotToken = (t, exp)
         return t
     }
 
     /// 识别食物照片，返回 (食物描述, 总热量)
     static func recognizeFood(image: UIImage) async throws -> (items: String, calories: Int) {
+        guard isConfigured else { throw AIError.notConfigured }
         let ct = try await copilotToken()
 
         guard let jpeg = image.jpegData(compressionQuality: 0.55) else { throw AIError.imageError }
-        // 压到合理大小
-        var data = jpeg
-        var quality = 0.55
-        while data.count > 900_000 && quality > 0.15 {
-            quality -= 0.15
-            data = image.jpegData(compressionQuality: quality) ?? data
+        // 缩到最大 512px 减小流量
+        if let resized = resize(image, maxSide: 512), let small = resized.jpegData(compressionQuality: 0.5) {
+            return try await callVision(jpegData: small, copilotToken: ct)
         }
-        let b64 = data.base64EncodedString()
+        return try await callVision(jpegData: jpeg, copilotToken: ct)
+    }
 
-        let prompt = """
-        你是营养估算助手。识别照片中的食物和饮品，估算总热量。
-        只返回 JSON，格式：{"items":"食物描述，用顿号分隔","calories":整数千卡}
-        估算原则：按照片中可见份量估计；饮料也估算。不要输出其他内容。
-        """
+    private static func callVision(jpegData: Data, copilotToken ct: String) async throws -> (items: String, calories: Int) {
+        let b64 = jpegData.base64EncodedString()
+        let endpoint = "https://api.githubcopilot.com/chat/completions"
 
-        let body: [String: Any] = [
+        let payload: [String: Any] = [
             "messages": [
+                [
+                    "role": "system",
+                    "content": "你是营养师。识别图片中的食物和饮品，只输出 JSON：{\"items\":\"食物名列表，顿号分隔\",\"calories\":总千卡数字}。不要输出其他任何文字。"
+                ],
                 [
                     "role": "user",
                     "content": [
-                        ["type": "text", "text": prompt],
+                        ["type": "text", "text": "识别这餐的食物和总热量"],
                         ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(b64)"]]
                     ]
                 ]
             ],
-            "max_tokens": 300,
-            "temperature": 0.2
+            "max_tokens": 300
         ]
 
-        guard let url = URL(string: "https://api.githubcopilot.com/chat/completions") else { throw AIError.badURL }
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw AIError.requestError
+        }
+        guard let url = URL(string: endpoint) else { throw AIError.badURL }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.timeoutInterval = 60
@@ -84,71 +185,78 @@ enum FoodAI {
         req.setValue("Visual Studio Code", forHTTPHeaderField: "Editor-Version")
         req.setValue("vscode/1.95.0", forHTTPHeaderField: "Editor-Plugin-Version")
         req.setValue("copilot-chat/0.20.0", forHTTPHeaderField: "Copilot-Integration-Id")
-        req.setValue("2024-10-01", forHTTPHeaderField: "X-GitHub-Api-Version")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.httpBody = bodyData
 
-        let (data2, response2) = try await URLSession.shared.data(for: req)
-        guard let http = response2 as? HTTPURLResponse else { throw AIError.requestFailed }
-        guard (200..<300).contains(http.statusCode) else { throw AIError.requestFailed }
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw AIError.requestError }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { cachedCopilotToken = nil }
+            throw AIError.requestFailed("服务返回 \(http.statusCode)，请稍后重试")
+        }
 
-        guard let obj = try? JSONSerialization.jsonObject(with: data2) as? [String: Any],
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String else { throw AIError.parseError }
+              let msg = choices.first?["message"] as? [String: Any],
+              let content = msg["content"] as? String else {
+            throw AIError.parseFailed
+        }
 
-        // 解析 JSON（容错：截取第一个 { 到最后一个 }）
-        guard let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}"),
-              let parsed = try? JSONSerialization.jsonObject(with: Data(content[start...end].utf8)) as? [String: Any],
-              let items = parsed["items"] as? String,
-              let cal = parsed["calories"] as? Int else { throw AIError.parseError }
-
+        // 从回复中提取 JSON
+        let cleaned = content
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let jsonData = cleaned.data(using: .utf8),
+              let result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let items = result["items"] as? String else {
+            // 兜底：把整段文字当描述
+            return (String(content.prefix(80)), 0)
+        }
+        let cal = (result["calories"] as? Int)
+            ?? (result["calories"] as? Double).map { Int($0) }
+            ?? 0
         return (items, cal)
     }
 
+    private static func resize(_ image: UIImage, maxSide: CGFloat) -> UIImage? {
+        let size = image.size
+        let longest = Swift.max(size.width, size.height)
+        guard longest > maxSide else { return nil }
+        let scale = maxSide / longest
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        UIGraphicsBeginImageContextWithOptions(newSize, true, 1)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let out = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return out
+    }
+
+    /// 退出登录
+    static func logout() {
+        KeychainHelper.remove("gh_oauth_token")
+        cachedCopilotToken = nil
+    }
+
+    /// 供设置页测试连通性
+    static func copilotTokenForTest() async throws -> String {
+        try await copilotToken()
+    }
+
     enum AIError: LocalizedError {
-        case badURL, authFailed, imageError, requestFailed, parseError
+        case notConfigured, badURL, imageError, authFailed, parseFailed, requestError
+        case deviceFlowFailed(String)
+        case requestFailed(String)
+
         var errorDescription: String? {
             switch self {
-            case .badURL: return "接口地址错误"
-            case .authFailed: return "Token 无效或 Copilot 未开通，请在「我的」页检查"
-            case .imageError: return "照片处理失败"
-            case .requestFailed: return "网络请求失败，请重试"
-            case .parseError: return "识别结果解析失败，请重试"
-            }
-        }
-    }
-}
-
-// MARK: - 照片选择器（拍照 + 相册）
-
-import PhotosUI
-import SwiftUI
-
-struct FoodPhotoPicker: UIViewControllerRepresentable {
-    let onImage: (UIImage) -> Void
-
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        var config = PHPickerConfiguration()
-        config.filter = .images
-        config.selectionLimit = 1
-        let picker = PHPickerViewController(configuration: config)
-        picker.delegate = context.coordinator
-        return picker
-    }
-    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator(onImage: onImage) }
-
-    final class Coordinator: NSObject, PHPickerViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onImage: (UIImage) -> Void
-        init(onImage: @escaping (UIImage) -> Void) { self.onImage = onImage }
-
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
-            guard let item = results.first?.itemProvider, item.canLoadObject(ofClass: UIImage.self) else { return }
-            item.loadObject(ofClass: UIImage.self) { [onImage] obj, _ in
-                if let img = obj as? UIImage {
-                    DispatchQueue.main.async { onImage(img) }
-                }
+            case .notConfigured: return "尚未登录 GitHub，请先在我的页面完成设备授权"
+            case .badURL: return "网络地址错误"
+            case .imageError: return "图片处理失败"
+            case .authFailed: return "授权已过期，请重新登录"
+            case .parseFailed: return "AI 返回格式异常，请重试"
+            case .requestError: return "请求构建失败"
+            case .deviceFlowFailed(let m): return m
+            case .requestFailed(let m): return m
             }
         }
     }

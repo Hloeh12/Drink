@@ -272,7 +272,7 @@ struct MeTabView: View {
                     IconBadge(system: "camera.viewfinder", fg: Palette.purple, bg: Palette.purpleSoft, size: 38)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("AI 拍照识别热量").font(.system(size: 14, weight: .semibold)).foregroundColor(Palette.ink)
-                        Text(FoodAI.isConfigured ? "已配置 · 拍照自动算热量" : "未配置 · 点此粘贴 GitHub Token")
+                        Text(FoodAI.isConfigured ? "已配置 · 拍照自动算热量" : "未连接 · 点此完成设备授权")
                             .font(.system(size: 11))
                             .foregroundColor(FoodAI.isConfigured ? Palette.green : Palette.ink2)
                     }
