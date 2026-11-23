@@ -5,6 +5,13 @@ import SwiftUI
 struct MealSection: View {
     @EnvironmentObject private var store: HealthStore
     @State private var expanded: Set<String> = []
+    @State private var showPickerFor: String? = nil
+    @State private var recognizing = false
+    @State private var aiResult: (items: String, calories: Int)? = nil
+    @State private var aiTargetKey: String? = nil
+    @State private var aiError: String? = nil
+    @State private var openAISettings = false
+    @State private var pickedImage: UIImage? = nil
 
     private struct MealKind {
         let key: String
@@ -41,6 +48,73 @@ struct MealSection: View {
 
     private var isExpanded: Bool { !expanded.isEmpty }
 
+    // MARK: - AI 识别结果条
+    private func aiResultBar(result: (items: String, calories: Int), key: String) -> some View {
+        let kind = kinds.first { $0.key == key }
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Image(systemName: "sparkles").font(.system(size: 13)).foregroundColor(Palette.purple)
+                Text("AI 识别结果").font(.system(size: 13, weight: .semibold)).foregroundColor(Palette.ink)
+                Spacer()
+                Text("\(result.calories) 千卡").font(.system(size: 13, weight: .bold)).foregroundColor(Palette.orange)
+            }
+            Text(result.items).font(.system(size: 12)).foregroundColor(Palette.ink2)
+            HStack(spacing: 8) {
+                Button {
+                    fillResult(result: result, key: key)
+                } label: {
+                    Label("填入\(kind?.title ?? "")", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 11).fill(Palette.green))
+                }
+                .buttonStyle(GlassButtonStyle(tint: Palette.green, filled: true))
+                Button {
+                    aiResult = nil; aiTargetKey = nil
+                } label: {
+                    Text("丢弃")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Palette.ink2)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                }
+                .buttonStyle(GlassButtonStyle())
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.purpleSoft))
+        .padding(.top, 10)
+    }
+
+    private func fillResult(result: (items: String, calories: Int), key: String) {
+        guard let kind = kinds.first(where: { $0.key == key }) else { return }
+        Haptic.success()
+        store.updateMeal(kind.textPath, value: result.items)
+        store.updateMealCalories(kind.calPath, value: result.calories)
+        aiResult = nil
+        aiTargetKey = nil
+    }
+
+    // MARK: - 照片选择后触发识别
+    private func handlePicked(_ image: UIImage) {
+        pickedImage = image
+        recognizing = true
+        aiError = nil
+        Task {
+            do {
+                let result = try await FoodAI.recognizeFood(image: image)
+                recognizing = false
+                aiResult = result
+                Haptic.medium()
+            } catch {
+                recognizing = false
+                aiError = error.localizedDescription
+                Haptic.medium()
+            }
+        }
+    }
+
     var body: some View {
         SurfaceCard(padding: 16) {
             VStack(spacing: 0) {
@@ -64,7 +138,45 @@ struct MealSection: View {
                             .padding(.vertical, 10)
                     }
                 }
+
+                // AI 识别结果弹层
+                if let result = aiResult, let key = aiTargetKey {
+                    aiResultBar(result: result, key: key)
+                }
+                if let err = aiError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+                        Text(err).font(.system(size: 12))
+                        Spacer()
+                        Button("设置 Token") { aiError = nil; openAISettings = true }
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(Palette.red)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 11).fill(Palette.red.opacity(0.08)))
+                    .padding(.top, 10)
+                }
+                if recognizing {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("AI 正在识别食物热量…").font(.system(size: 12)).foregroundColor(Palette.ink2)
+                        Spacer()
+                    }
+                    .padding(.top, 10)
+                }
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { showPickerFor != nil },
+            set: { if !$0 { showPickerFor = nil }
+            })) {
+            FoodPhotoPicker { image in
+                showPickerFor = nil
+                handlePicked(image)
+            }
+        }
+        .sheet(isPresented: $openAISettings) {
+            AISettingsView()
         }
     }
 
@@ -142,7 +254,10 @@ struct MealSection: View {
                         .background(RoundedRectangle(cornerRadius: 11).fill(Palette.bg))
 
                         Button {
-                            // 占位：照片功能依赖 Supabase Storage，本地版暂不启用
+                            Haptic.light()
+                            aiError = nil
+                            aiTargetKey = kind.key
+                            showPickerFor = kind.key
                         } label: {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 14))

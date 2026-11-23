@@ -242,6 +242,7 @@ struct MeTabView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 profileCard
+                aiCard
                 settingsCard
                 exportCard
                 aboutCard
@@ -253,6 +254,34 @@ struct MeTabView: View {
         .background(LiquidBackground())
         .sheet(isPresented: $showShare) {
             if let url = csvURL { ShareSheet(items: [url]) }
+        }
+        .sheet(isPresented: $showAISettings) {
+            AISettingsView()
+        }
+    }
+
+    @State private var showAISettings = false
+
+    private var aiCard: some View {
+        SurfaceCard(padding: 18) {
+            Button {
+                Haptic.light()
+                showAISettings = true
+            } label: {
+                HStack(spacing: 12) {
+                    IconBadge(system: "camera.viewfinder", fg: Palette.purple, bg: Palette.purpleSoft, size: 38)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("AI 拍照识别热量").font(.system(size: 14, weight: .semibold)).foregroundColor(Palette.ink)
+                        Text(FoodAI.isConfigured ? "已配置 · 拍照自动算热量" : "未配置 · 点此粘贴 GitHub Token")
+                            .font(.system(size: 11))
+                            .foregroundColor(FoodAI.isConfigured ? Palette.green : Palette.ink2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundColor(Palette.ink3)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
