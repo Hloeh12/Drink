@@ -142,8 +142,9 @@ final class HealthStore: ObservableObject {
 
     // MARK: - 喝水操作
 
-    func setWater(_ amount: Int) {
-        water[todayKey] = max(0, amount)
+    func setWater(_ amount: Int, for date: Date? = nil) {
+        let key = date.map { Self.key(for: $0) } ?? todayKey
+        water[key] = max(0, amount)
         defaults.set(water, forKey: waterKey)
         objectWillChange.send()
         syncWater(amount)
@@ -151,20 +152,23 @@ final class HealthStore: ObservableObject {
 
     // MARK: - 餐食操作
 
-    func updateMeal(_ field: WritableKeyPath<DayMeal, String>, value: String) {
-        var meal = todayMeal; meal[keyPath: field] = value; meals[todayKey] = meal
+    func updateMeal(_ field: WritableKeyPath<DayMeal, String>, value: String, for date: Date? = nil) {
+        let key = date.map { Self.key(for: $0) } ?? todayKey
+        var meal = meals[key] ?? DayMeal(); meal[keyPath: field] = value; meals[key] = meal
         saveMeals()
         syncMeal(meal)
     }
 
-    func updateMealCalories(_ field: WritableKeyPath<DayMeal, Int?>, value: Int?) {
-        var meal = todayMeal; meal[keyPath: field] = value; meals[todayKey] = meal
+    func updateMealCalories(_ field: WritableKeyPath<DayMeal, Int?>, value: Int?, for date: Date? = nil) {
+        let key = date.map { Self.key(for: $0) } ?? todayKey
+        var meal = meals[key] ?? DayMeal(); meal[keyPath: field] = value; meals[key] = meal
         saveMeals()
         syncMeal(meal)
     }
 
-    func updateMealPhoto(_ field: WritableKeyPath<DayMeal, String?>, value: String?) {
-        var meal = todayMeal; meal[keyPath: field] = value; meals[todayKey] = meal
+    func updateMealPhoto(_ field: WritableKeyPath<DayMeal, String?>, value: String?, for date: Date? = nil) {
+        let key = date.map { Self.key(for: $0) } ?? todayKey
+        var meal = meals[key] ?? DayMeal(); meal[keyPath: field] = value; meals[key] = meal
         saveMeals()
         syncMeal(meal)
     }
@@ -176,8 +180,8 @@ final class HealthStore: ObservableObject {
 
     // MARK: - 体重操作
 
-    func setWeight(_ value: Double) {
-        let key = todayKey
+    func setWeight(_ value: Double, for date: Date? = nil) {
+        let key = date.map { Self.key(for: $0) } ?? todayKey
         if let idx = weights.firstIndex(where: { $0.date == key }) {
             weights[idx].weight = value
         } else {

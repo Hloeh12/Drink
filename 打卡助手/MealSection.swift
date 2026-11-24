@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MealSection: View {
     @EnvironmentObject private var store: HealthStore
+    var day: Date? = nil   // nil = 今天；传入则编辑历史日期
     @State private var expanded: Set<String> = []
     @State private var showPickerFor: String? = nil
     @State private var recognizing = false
@@ -48,6 +49,21 @@ struct MealSection: View {
 
     private var isExpanded: Bool { !expanded.isEmpty }
 
+    /// 快速添加入口：展开指定餐次
+    private let expandPublisher = NotificationCenter.default.publisher(for: .expandMeal)
+
+    // MARK: - 键盘收起工具
+
+#if canImport(UIKit)
+import UIKit
+
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif
+
     // MARK: - AI 识别结果条
     private func aiResultBar(result: (items: String, calories: Int), key: String) -> some View {
         let kind = kinds.first { $0.key == key }
@@ -90,8 +106,8 @@ struct MealSection: View {
     private func fillResult(result: (items: String, calories: Int), key: String) {
         guard let kind = kinds.first(where: { $0.key == key }) else { return }
         Haptic.success()
-        store.updateMeal(kind.textPath, value: result.items)
-        store.updateMealCalories(kind.calPath, value: result.calories)
+        store.updateMeal(kind.textPath, value: result.items, for: day)
+        store.updateMealCalories(kind.calPath, value: result.calories, for: day)
         aiResult = nil
         aiTargetKey = nil
     }
@@ -116,6 +132,16 @@ struct MealSection: View {
     }
 
     var body: some View {
+        bodyContent
+            .onReceive(expandPublisher) { note in
+                if let key = note.object as? String, kinds.contains(where: { $0.key == key }) {
+                    withAnimation { expanded.insert(key) }
+                }
+            }
+            .onTapGesture { hideKeyboard() }
+    }
+
+    @ViewBuilder private var bodyContent: some View {
         SurfaceCard(padding: 16) {
             VStack(spacing: 0) {
                 HStack {
@@ -180,8 +206,10 @@ struct MealSection: View {
         }
     }
 
+    private var mealNow: DayMeal { day.map { store.mealFor($0) } ?? store.todayMeal }
+
     private func mealRow(_ kind: MealKind) -> some View {
-        let meal = store.todayMeal
+        let meal = mealNow
         let text = meal[keyPath: kind.textPath]
         let calories = meal[keyPath: kind.calPath] ?? 0
         let opened = expanded.contains(kind.key)
@@ -230,8 +258,8 @@ struct MealSection: View {
             if opened {
                 VStack(spacing: 9) {
                     TextField(kind.placeholder, text: Binding(
-                        get: { store.todayMeal[keyPath: kind.textPath] },
-                        set: { store.updateMeal(kind.textPath, value: $0) }
+                        get: { mealNow[keyPath: kind.textPath] },
+                        set: { store.updateMeal(kind.textPath, value: $0, for: day) }
                     ))
                     .font(.system(size: 14))
                     .padding(.horizontal, 13).padding(.vertical, 10)
@@ -243,8 +271,8 @@ struct MealSection: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(Palette.orange)
                             TextField("热量", value: Binding(
-                                get: { store.todayMeal[keyPath: kind.calPath] },
-                                set: { store.updateMealCalories(kind.calPath, value: $0) }
+                                get: { mealNow[keyPath: kind.calPath] },
+                                set: { store.updateMealCalories(kind.calPath, value: $0, for: day) }
                             ), format: .number)
                             .keyboardType(.numberPad)
                             .font(.system(size: 14))

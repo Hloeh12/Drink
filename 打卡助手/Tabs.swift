@@ -383,7 +383,7 @@ struct MeTabView: View {
                 Text("本工具仅用于自我记录，不提供医疗建议。")
                     .font(.system(size: 11))
                     .foregroundColor(Palette.ink3)
-                Text("版本 1.3").font(.system(size: 10)).foregroundColor(Palette.ink3).padding(.top, 2)
+                Text("版本 1.5").font(.system(size: 10)).foregroundColor(Palette.ink3).padding(.top, 2)
             }
         }
     }

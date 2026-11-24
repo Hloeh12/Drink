@@ -24,13 +24,26 @@ struct ContentView: View {
         }
         .confirmationDialog("快速添加", isPresented: $showQuickAdd, titleVisibility: .visible) {
             Button("喝一杯 \(store.selectedCup)ml") {
+                Haptic.light()
                 store.setWater(store.todayWater + store.selectedCup)
             }
-            Button("记录今日饮食") { tab = 0 }
-            Button("记录体重") { tab = 0 }
+            Button("记录早餐") { quickMeal("breakfast") }
+            Button("记录午餐") { quickMeal("lunch") }
+            Button("记录晚餐") { quickMeal("dinner") }
+            Button("记录加餐") { quickMeal("snack") }
             Button("取消", role: .cancel) {}
         }
     }
+
+    /// 快速添加里的餐次入口 → 切到首页并展开对应餐次
+    private func quickMeal(_ key: String) {
+        tab = 0
+        NotificationCenter.default.post(name: .expandMeal, object: key)
+    }
+}
+
+extension Notification.Name {
+    static let expandMeal = Notification.Name("expandMeal")
 }
 
 // MARK: - 底部导航栏
@@ -103,7 +116,7 @@ struct TodayView: View {
                 }
                 if isToday { HeroCard() } else { HistoryCard(day: selectedDay!) }
                 if isToday { waterControls }
-                if isToday { MealSection() } else { HistoryMeals(day: selectedDay!) }
+                MealSection(day: isToday ? nil : selectedDay)
                 if isToday { weightCard }
                 tipText
             }

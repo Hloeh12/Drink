@@ -4,20 +4,20 @@ import SwiftUI
 // iOS 26 液态玻璃风格：白玻璃卡片 + 发丝描边 + 镜面高光 + 柔和色彩
 
 enum Palette {
-    static let bg        = Color(hex: 0xF2F4F8)
-    static let green     = Color(hex: 0x2FA36B)
-    static let greenSoft = Color(hex: 0xE6F4EC)
-    static let orange    = Color(hex: 0xF5A623)
-    static let orangeSoft = Color(hex: 0xFEF2DF)
-    static let blue      = Color(hex: 0x3E9BE0)
-    static let blueSoft  = Color(hex: 0xE7F3FC)
-    static let purple    = Color(hex: 0x9B7EDE)
+    static let bg        = Color(hex: 0xF7F5FB)
+    static let green     = Color(hex: 0x8B6FC7)   // 主色：淡紫
+    static let greenSoft = Color(hex: 0xEFE9F9)   // 淡紫软底
+    static let orange    = Color(hex: 0xB08BE8)   // 次色：浅紫
+    static let orangeSoft = Color(hex: 0xF3EDFB)
+    static let blue      = Color(hex: 0x9F86D9)   // 水杯：淡紫
+    static let blueSoft  = Color(hex: 0xEDE7F8)
+    static let purple    = Color(hex: 0x7C5FC9)
     static let purpleSoft = Color(hex: 0xF1EBFB)
-    static let red       = Color(hex: 0xF25C5C)
-    static let ink       = Color(hex: 0x1C2733)
-    static let ink2      = Color(hex: 0x76828F)
-    static let ink3      = Color(hex: 0xAEB9C4)
-    static let line      = Color(hex: 0xEEF1F4)
+    static let red       = Color(hex: 0xE57B9E)
+    static let ink       = Color(hex: 0x241E33)
+    static let ink2      = Color(hex: 0x837C96)
+    static let ink3      = Color(hex: 0xB5AEC7)
+    static let line      = Color(hex: 0xF0EDF7)
 }
 
 extension Color {
