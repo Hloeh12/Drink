@@ -52,18 +52,6 @@ struct MealSection: View {
     /// 快速添加入口：展开指定餐次
     private let expandPublisher = NotificationCenter.default.publisher(for: .expandMeal)
 
-    // MARK: - 键盘收起工具
-
-#if canImport(UIKit)
-import UIKit
-
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-#endif
-
     // MARK: - AI 识别结果条
     private func aiResultBar(result: (items: String, calories: Int), key: String) -> some View {
         let kind = kinds.first { $0.key == key }
@@ -390,3 +378,15 @@ struct MealHistoryList: View {
         return Calendar.current.isDateInToday(date) ? "\(base) · 今天" : base
     }
 }
+
+// MARK: - 键盘收起工具
+
+#if canImport(UIKit)
+import UIKit
+
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif
