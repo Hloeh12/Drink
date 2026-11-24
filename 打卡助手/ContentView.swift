@@ -134,7 +134,7 @@ struct TodayView: View {
                 Text(Date(), format: .dateTime.month(.defaultDigits).day())
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(Palette.ink)
-                Text("打卡助手")
+                Text("Eat well")
                     .font(.system(size: 12))
                     .foregroundColor(Palette.ink2)
             }

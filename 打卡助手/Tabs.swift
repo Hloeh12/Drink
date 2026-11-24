@@ -298,7 +298,7 @@ struct MeTabView: View {
                         .foregroundColor(.white)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("打卡助手").font(.system(size: 17, weight: .bold)).foregroundColor(Palette.ink)
+                    Text("Eat well").font(.system(size: 17, weight: .bold)).foregroundColor(Palette.ink)
                     Text("喝水 · 饮食 · 体重记录").font(.system(size: 12)).foregroundColor(Palette.ink2)
                 }
                 Spacer()
